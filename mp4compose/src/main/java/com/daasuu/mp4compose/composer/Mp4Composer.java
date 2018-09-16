@@ -31,10 +31,14 @@ public class Mp4Composer {
     private GlFilter filter;
     private Resolution outputResolution;
     private int bitrate = -1;
+    private boolean mute = false;
     private Rotation rotation = Rotation.NORMAL;
     private Listener listener;
     private FillMode fillMode = FillMode.PRESERVE_ASPECT_FIT;
     private FillModeCustomItem fillModeCustomItem;
+    private int timeScale = 1;
+    private boolean flipVertical = false;
+    private boolean flipHorizontal = false;
 
     private ExecutorService executorService;
 
@@ -59,6 +63,21 @@ public class Mp4Composer {
         return this;
     }
 
+    public Mp4Composer mute(boolean mute) {
+        this.mute = mute;
+        return this;
+    }
+
+    public Mp4Composer flipVertical(boolean flipVertical) {
+        this.flipVertical = flipVertical;
+        return this;
+    }
+
+    public Mp4Composer flipHorizontal(boolean flipHorizontal) {
+        this.flipHorizontal = flipHorizontal;
+        return this;
+    }
+
     public Mp4Composer rotation(@NonNull Rotation rotation) {
         this.rotation = rotation;
         return this;
@@ -78,6 +97,11 @@ public class Mp4Composer {
 
     public Mp4Composer listener(@NonNull Listener listener) {
         this.listener = listener;
+        return this;
+    }
+
+    public Mp4Composer timeScale(final int timeScale) {
+        this.timeScale = timeScale;
         return this;
     }
 
@@ -129,21 +153,36 @@ public class Mp4Composer {
                 final int videoRotate = getVideoRotation(srcPath);
                 final Resolution srcVideoResolution = getVideoResolution(srcPath, videoRotate);
 
-                if (outputResolution == null) {
-                    outputResolution = srcVideoResolution;
-                }
-
                 if (filter == null) {
                     filter = new GlFilter();
+                }
+
+                if (fillMode == null) {
+                    fillMode = FillMode.PRESERVE_ASPECT_FIT;
+                }
+
+                if (fillModeCustomItem != null) {
+                    fillMode = FillMode.CUSTOM;
+                }
+
+                if (outputResolution == null) {
+                    if (fillMode == FillMode.CUSTOM) {
+                        outputResolution = srcVideoResolution;
+                    } else {
+                        Rotation rotate = Rotation.fromInt(rotation.getRotation() + videoRotate);
+                        if (rotate == Rotation.ROTATION_90 || rotate == Rotation.ROTATION_270) {
+                            outputResolution = new Resolution(srcVideoResolution.height(), srcVideoResolution.width());
+                        } else {
+                            outputResolution = srcVideoResolution;
+                        }
+                    }
                 }
                 if (filter instanceof IResolutionFilter) {
                     ((IResolutionFilter) filter).setResolution(outputResolution);
                 }
 
-                if (fillModeCustomItem != null) {
-                    fillMode = FillMode.CUSTOM;
-                } else {
-                    fillMode = FillMode.PRESERVE_ASPECT_FIT;
+                if (timeScale < 2) {
+                    timeScale = 1;
                 }
 
                 Log.d(TAG, "rotation = " + (rotation.getRotation() + videoRotate));
@@ -160,10 +199,14 @@ public class Mp4Composer {
                             outputResolution,
                             filter,
                             bitrate,
+                            mute,
                             Rotation.fromInt(rotation.getRotation() + videoRotate),
                             srcVideoResolution,
                             fillMode,
-                            fillModeCustomItem
+                            fillModeCustomItem,
+                            timeScale,
+                            flipVertical,
+                            flipHorizontal
                     );
 
                 } catch (Exception e) {

@@ -28,7 +28,7 @@ class Mp4ComposerEngine {
     private static final long PROGRESS_INTERVAL_STEPS = 10;
     private FileDescriptor inputFileDescriptor;
     private VideoComposer videoComposer;
-    private AudioComposer audioComposer;
+    private IAudioComposer audioComposer;
     private MediaExtractor mediaExtractor;
     private MediaMuxer mediaMuxer;
     private ProgressCallback progressCallback;
@@ -49,10 +49,14 @@ class Mp4ComposerEngine {
             final Resolution outputResolution,
             final GlFilter filter,
             final int bitrate,
+            final boolean mute,
             final Rotation rotation,
             final Resolution inputResolution,
             final FillMode fillMode,
-            final FillModeCustomItem fillModeCustomItem
+            final FillModeCustomItem fillModeCustomItem,
+            final int timeScale,
+            final boolean flipVertical,
+            final boolean flipHorizontal
     ) throws IOException {
 
 
@@ -79,40 +83,43 @@ class Mp4ComposerEngine {
 
             MuxRender muxRender = new MuxRender(mediaMuxer);
 
-            if (mediaMetadataRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) != null) {
+            // identify track indices
+            MediaFormat format = mediaExtractor.getTrackFormat(0);
+            String mime = format.getString(MediaFormat.KEY_MIME);
+
+            final int videoTrackIndex;
+            final int audioTrackIndex;
+
+            if (mime.startsWith("video/")) {
+                videoTrackIndex = 0;
+                audioTrackIndex = 1;
+            } else {
+                videoTrackIndex = 1;
+                audioTrackIndex = 0;
+            }
+
+            // setup video composer
+            videoComposer = new VideoComposer(mediaExtractor, videoTrackIndex, videoOutputFormat, muxRender, timeScale);
+            videoComposer.setUp(filter, rotation, outputResolution, inputResolution, fillMode, fillModeCustomItem, flipVertical, flipHorizontal);
+            mediaExtractor.selectTrack(videoTrackIndex);
+
+            // setup audio if present and not muted
+            if (mediaMetadataRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) != null && !mute) {
                 // has Audio video
 
-                MediaFormat format = mediaExtractor.getTrackFormat(0);
-                String mime = format.getString(MediaFormat.KEY_MIME);
-
-                final int videoTrackIndex;
-                final int audioTrackIndex;
-
-                if (mime.startsWith("video/")) {
-                    videoTrackIndex = 0;
-                    audioTrackIndex = 1;
+                if (timeScale < 2) {
+                    audioComposer = new AudioComposer(mediaExtractor, audioTrackIndex, muxRender);
                 } else {
-                    videoTrackIndex = 1;
-                    audioTrackIndex = 0;
+                    audioComposer = new RemixAudioComposer(mediaExtractor, audioTrackIndex, mediaExtractor.getTrackFormat(audioTrackIndex), muxRender, timeScale);
                 }
 
-                audioComposer = new AudioComposer(mediaExtractor, audioTrackIndex, muxRender);
+                audioComposer.setup();
 
-                videoComposer = new VideoComposer(mediaExtractor, videoTrackIndex, videoOutputFormat, muxRender);
-                videoComposer.setUp(filter, rotation, outputResolution, inputResolution, fillMode, fillModeCustomItem);
-
-
-                mediaExtractor.selectTrack(videoTrackIndex);
                 mediaExtractor.selectTrack(audioTrackIndex);
 
                 runPipelines();
-
             } else {
                 // no audio video
-
-                videoComposer = new VideoComposer(mediaExtractor, 0, videoOutputFormat, muxRender);
-                videoComposer.setUp(filter, rotation, outputResolution, inputResolution, fillMode, fillModeCustomItem);
-                mediaExtractor.selectTrack(0);
                 runPipelinesNoAudio();
             }
 
@@ -125,6 +132,7 @@ class Mp4ComposerEngine {
                     videoComposer = null;
                 }
                 if (audioComposer != null) {
+                    audioComposer.release();
                     audioComposer = null;
                 }
                 if (mediaExtractor != null) {

@@ -16,13 +16,14 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
+import android.widget.CheckBox;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import com.daasuu.mp4compose.FillMode;
 import com.daasuu.mp4compose.composer.Mp4Composer;
-import com.daasuu.mp4compose.filter.GlSepiaFilter;
+import com.daasuu.mp4compose.filter.GlLutFilter;
 import com.daasuu.sample.video.VideoItem;
 import com.daasuu.sample.video.VideoListAdapter;
 import com.daasuu.sample.video.VideoLoadListener;
@@ -46,22 +47,31 @@ public class MainActivity extends AppCompatActivity {
     private Mp4Composer mp4Composer;
     private Bitmap bitmap;
 
+    private CheckBox muteCheckBox;
+    private CheckBox flipVerticalCheckBox;
+    private CheckBox flipHorizontalCheckBox;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        muteCheckBox = findViewById(R.id.mute_check_box);
+        flipVerticalCheckBox = findViewById(R.id.flip_vertical_check_box);
+        flipHorizontalCheckBox = findViewById(R.id.flip_horizontal_check_box);
+
         findViewById(R.id.start_codec_button).setOnClickListener(v -> {
             v.setEnabled(false);
             startCodec();
         });
+
         findViewById(R.id.cancel_button).setOnClickListener(v -> {
             if (mp4Composer != null) {
                 mp4Composer.cancel();
             }
         });
 
-        bitmap = BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher_sample);
+        bitmap = BitmapFactory.decodeResource(getResources(), R.drawable.lookup_sample);
     }
 
     @Override
@@ -101,12 +111,16 @@ public class MainActivity extends AppCompatActivity {
         final ProgressBar progressBar = findViewById(R.id.progress_bar);
         progressBar.setMax(100);
 
+
         mp4Composer = null;
         mp4Composer = new Mp4Composer(videoItem.getPath(), videoPath)
                 // .rotation(Rotation.ROTATION_270)
-                .size(720, 1280)
+                //.size(720, 1280)
                 .fillMode(FillMode.PRESERVE_ASPECT_FIT)
-                .filter(new GlSepiaFilter())
+                .filter(new GlLutFilter(bitmap))
+                .mute(muteCheckBox.isChecked())
+                .flipHorizontal(flipHorizontalCheckBox.isChecked())
+                .flipVertical(flipVerticalCheckBox.isChecked())
                 .listener(new Mp4Composer.Listener() {
                     @Override
                     public void onProgress(double progress) {

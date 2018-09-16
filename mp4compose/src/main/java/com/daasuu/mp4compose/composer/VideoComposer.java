@@ -40,17 +40,26 @@ class VideoComposer {
     private boolean decoderStarted;
     private boolean encoderStarted;
     private long writtenPresentationTimeUs;
+    private final int timeScale;
 
     VideoComposer(MediaExtractor mediaExtractor, int trackIndex,
-                  MediaFormat outputFormat, MuxRender muxRender) {
+                  MediaFormat outputFormat, MuxRender muxRender, int timeScale) {
         this.mediaExtractor = mediaExtractor;
         this.trackIndex = trackIndex;
         this.outputFormat = outputFormat;
         this.muxRender = muxRender;
+        this.timeScale = timeScale;
     }
 
 
-    void setUp(GlFilter filter, Rotation rotation, Resolution outputResolution, Resolution inputResolution, FillMode fillMode, FillModeCustomItem fillModeCustomItem) {
+    void setUp(GlFilter filter,
+               Rotation rotation,
+               Resolution outputResolution,
+               Resolution inputResolution,
+               FillMode fillMode,
+               FillModeCustomItem fillModeCustomItem,
+               final boolean flipVertical,
+               final boolean flipHorizontal) {
         mediaExtractor.selectTrack(trackIndex);
         try {
             encoder = MediaCodec.createEncoderByType(outputFormat.getString(MediaFormat.KEY_MIME));
@@ -77,6 +86,8 @@ class VideoComposer {
         decoderSurface.setInputResolution(inputResolution);
         decoderSurface.setFillMode(fillMode);
         decoderSurface.setFillModeCustomItem(fillModeCustomItem);
+        decoderSurface.setFlipHorizontal(flipHorizontal);
+        decoderSurface.setFlipVertical(flipVertical);
 
         try {
             decoder = MediaCodec.createDecoderByType(inputFormat.getString(MediaFormat.KEY_MIME));
@@ -158,7 +169,7 @@ class VideoComposer {
         }
         int sampleSize = mediaExtractor.readSampleData(decoderInputBuffers[result], 0);
         boolean isKeyFrame = (mediaExtractor.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0;
-        decoder.queueInputBuffer(result, 0, sampleSize, mediaExtractor.getSampleTime(), isKeyFrame ? MediaCodec.BUFFER_FLAG_SYNC_FRAME : 0);
+        decoder.queueInputBuffer(result, 0, sampleSize, mediaExtractor.getSampleTime() / timeScale, isKeyFrame ? MediaCodec.BUFFER_FLAG_SYNC_FRAME : 0);
         mediaExtractor.advance();
         return DRAIN_STATE_CONSUMED;
     }
